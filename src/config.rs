@@ -16,7 +16,7 @@ impl Config {
         dotenv().ok();
 
         let keywords = env::var("KEYWORDS")
-            .unwrap_or_else(|_| "사이버,보안,개발,소프트웨어,AI,클라우드,데이터,네트워크,정보보호,플랫폼,시스템,디지털,자동화,솔루션".to_string())
+            .unwrap_or_else(|_| "사이버,보안,개발,소프트웨어,AI,클라우드,데이터,네트워크,정보보호,플랫폼,시스템,디지털,자동화,솔루션,IoT,OT,산업,정보보안,보안운영".to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
