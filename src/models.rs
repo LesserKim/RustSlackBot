@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 //매크로 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub struct Announcement {
     pub id: String,
     pub title: String,
     pub url: String, 

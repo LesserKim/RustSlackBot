@@ -21,3 +21,10 @@ pub fn save_seen(path: &str, seen: &HashSet<String>)
     }
 }
 
+pub fn filter_new<'a>(
+    announcements: &'a [crate::models::Announcement],
+    seen: &HashSet<String>,
+) -> Vec<&'a crate::models::Announcement>{
+    announcements.iter().filter(|a| !seen.contains(&a.id)).collect()
+}
+
