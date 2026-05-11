@@ -2,123 +2,85 @@ use scraper::{Html, Selector};
 use crate::models::Announcement;
 use super::base::{Crawler, build_client};
 
-pub struct NtisCrawler
-{
+pub struct KisaCrawler {
     timeout: u64,
 }
 
-impl NtisCrawler
-{
-    pub fn new(timeout: u64) -> Self
-    {
-        Self{timeout}
+impl KisaCrawler {
+    pub fn new(timeout: u64) -> Self {
+        Self { timeout }
     }
 }
 
-impl Crawler for NtisCrawler
-{
-    fn source_name(&self) -> &str{
-        "NTIS"
+impl Crawler for KisaCrawler {
+    fn source_name(&self) -> &str {
+        "KISA"
     }
 
-    fn fetch(&self) -> Result<Vec<Announcement>, Box<dyn std::error::Error>>
-    {
-        let url = "https://www.ntis.go.kr/rndgate/eg/un/ra/mng.do";
+    fn fetch(&self) -> Result<Vec<Announcement>, Box<dyn std::error::Error>> {
+        let url = "https://www.kisa.or.kr/403?page=1&searchDiv=10&searchWord=보안";
         let client = build_client(self.timeout);
         let html = client.get(url)
-            .header("Referer", "https://www.ntis.go.kr")
+            .header("Referer", "https://www.kisa.or.kr")
             .send()?
             .text()?;
 
         let doc = Html::parse_document(&html);
-        let tbody_sel = Selector::parse("table.basic_list tbody").unwrap();
+        let tbody_sel = Selector::parse("table.tbl_board.notice tbody").unwrap();
         let tr_sel = Selector::parse("tr").unwrap();
-        let td_sel = Selector::parse("td").unwrap();
+        let sbj_sel = Selector::parse("td.sbj").unwrap();
+        let date_sel = Selector::parse("td.date").unwrap();
         let a_sel = Selector::parse("a").unwrap();
 
         let mut results = vec![];
 
-        let tbody = match doc.select(&tbody_sel).next()
-        {
+        let tbody = match doc.select(&tbody_sel).next() {
             Some(t) => t,
             None => return Ok(results),
         };
 
-        for tr in tbody.select(&tr_sel)
-        {
-            let mut title_td = None;
-            let mut date_td = None;
-            let mut agency_td = None;
-            let mut deadline_td = None;
-
-            for td in tr.select(&td_sel)
-            {
-                if let Some(data_tile) = td.value().attr("data-title")
-                {
-                    match data_title.trim()
-                    {
-                        "공고명" => title_td = Some(td),
-                        "등록일" => date_td = Some(td),
-                        "기관명" => agency_td = Some(td),
-                        "마감일" => deadline_td = Some(td),
-                        _ => {},
-                    }
-                }
-            }
-
-            let title_td = match title_td
-            {
-                Some(a) => a, 
+        for tr in tbody.select(&tr_sel) {
+            let td_sbj = match tr.select(&sbj_sel).next() {
+                Some(t) => t,
                 None => continue,
             };
 
-            let a = match title_td.select(&a_sel).next()
-            {
+            let a = match td_sbj.select(&a_sel).next() {
                 Some(a) => a,
                 None => continue,
             };
 
             let title = a.text().collect::<String>().trim().to_string();
             let href = a.value().attr("href").unwrap_or("");
-            let full_url = if href.starts_with("/"){
-                format!("https://www.ntis.go.kr{}", href)
+            let full_url = if href.starts_with("/") {
+                format!("https://www.kisa.or.kr{}", href)
             } else {
                 href.to_string()
             };
 
-            let ann_id = if full_url.contains("roRndUid=")
-            {
-                full_url.split("roRndUid=").nth(1).unwrap().split("&").next().unwrap().to_string()
+            let ann_id = if full_url.contains("postSeq=") {
+                full_url.split("postSeq=").nth(1).unwrap().split("&").next().unwrap().to_string()
             } else {
-                format!("{:x}", md5_hash(&full_url))
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                full_url.hash(&mut hasher);
+                format!("{:x}", hasher.finish())
             };
 
-            let mut ann = Announcement::new(
-                format!("ntis_{}", ann_id),
-                title,
-                full_url,
-                self.source_name().to_string(),
-            );
+            let date = tr.select(&date_sel).next()
+                .map(|t| t.text().collect::<String>().trim().to_string());
 
             let mut ann = Announcement::new(
-                format!("ntis_{}", ann_id),
+                format!("kisa_{}", ann_id),
                 title,
                 full_url,
                 self.source_name().to_string(),
             );
-            ann.agency = agency_td.map(|t| t.text().collect::<String>().trim().to_string());
-            ann.date = date_td.map(|t| t.text().collect::<String>().trim().to_string());
-            ann.deadline = deadline_td.map(|t| t.text().collect::<String>().trim().to_string());
+            ann.date = date;
 
             results.push(ann);
         }
+
         Ok(results)
     }
-}
-
-fn md5_hash(s: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
 }
