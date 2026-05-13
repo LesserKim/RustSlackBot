@@ -62,7 +62,7 @@ fn run_job(cfg: &Config)
             .filter(|a| !seen.contains(&a.id))
             .collect();
 
-        log::info(
+        log::info!(
             "[{}] 수집 {}건 -> 매칭 -> 신규 {}건",
             crawler.source_name(),
             raw.len(),

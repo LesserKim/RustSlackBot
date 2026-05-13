@@ -53,7 +53,7 @@ impl Crawler for NtisCrawler
 
             for td in tr.select(&td_sel)
             {
-                if let Some(data_tile) = td.value().attr("data-title")
+                if let Some(data_title) = td.value().attr("data-title")
                 {
                     match data_title.trim()
                     {
