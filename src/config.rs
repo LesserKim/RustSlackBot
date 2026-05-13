@@ -1,6 +1,7 @@
 use std::env;
 use dotenv::dotenv;
 
+#[derive(Clone)]
 pub struct Config {
     pub slack_bot_token: String,
     pub slack_channel: String,
