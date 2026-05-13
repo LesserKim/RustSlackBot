@@ -100,12 +100,12 @@ impl Crawler for NtisCrawler
                 self.source_name().to_string(),
             );
 
-            let mut ann = Announcement::new(
-                format!("ntis_{}", ann_id),
-                title,
-                full_url,
-                self.source_name().to_string(),
-            );
+            //let mut ann = Announcement::new(
+             //   format!("ntis_{}", ann_id),
+            //    title,
+            //    full_url,
+           //     self.source_name().to_string(),
+           // );
             ann.agency = agency_td.map(|t| t.text().collect::<String>().trim().to_string());
             ann.date = date_td.map(|t| t.text().collect::<String>().trim().to_string());
             ann.deadline = deadline_td.map(|t| t.text().collect::<String>().trim().to_string());
