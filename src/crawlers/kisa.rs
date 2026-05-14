@@ -22,16 +22,32 @@ impl KisaCrawler {
 
         let doc = Html::parse_document(&html);
 
-        // 테이블에서 등록마감일시 추출 (날짜 + 패턴)
-        let td_sel = Selector::parse("td").unwrap();
-        let deadline_date_re = Regex::new(r"\d{4}\.\s*\d{1,2}\.\s*\d{1,2}.*?까지").unwrap();
-        for cell in doc.select(&td_sel)
-        {
-            let text = cell.text().collect::<String>();
-            let text = text.trim().to_string();
-            if deadline_date_re.is_match(&text)
-            {
-                extra.insert("마감일". to_string(), text);
+        // 등록 마감일시 추출
+        // 테이블에서 등록마감일시 추출 (헤더 행 → 데이터 행)
+        let tr_sel = Selector::parse("tr").unwrap();
+        let td_sel2 = Selector::parse("td").unwrap();
+        let mut deadline_col_idx: Option<usize> = None;
+        for tr in doc.select(&tr_sel) {
+            let tds: Vec<_> = tr.select(&td_sel2).collect();
+            // 헤더 행에서 등록마감일시 칼럼 위치 찾기
+            if deadline_col_idx.is_none() {
+                for (i, td) in tds.iter().enumerate() {
+                    let text = td.text().collect::<String>();
+                    if text.contains("등록마감") {
+                        deadline_col_idx = Some(i);
+                        break;
+                    }
+                }
+                continue;
+            }
+            // 데이터 행에서 같은 위치의 값 추출
+            if let Some(idx) = deadline_col_idx {
+                if let Some(td) = tds.get(idx) {
+                    let text = td.text().collect::<String>().trim().to_string();
+                    if !text.is_empty() {
+                        extra.insert("마감일".to_string(), text);
+                    }
+                }
                 break;
             }
         }
