@@ -22,18 +22,17 @@ impl KisaCrawler {
 
         let doc = Html::parse_document(&html);
 
-        // 테이블에서 등록마감일시 추출
-        let td_sel = Selector::parse("th, td").unwrap();
-        let mut next_is_deadline = false;
-        for cell in doc.select(&td_sel) {
+        // 테이블에서 등록마감일시 추출 (날짜 + 패턴)
+        let td_sel = Selector::parse("td").unwrap();
+        let deadline_date_re = Regex::new(r"\d{4}\.\s*\d{1,2}\.\s*\d{1,2}.*?까지").unwrap();
+        for cell in doc.select(&td_sel)
+        {
             let text = cell.text().collect::<String>();
-            let text = text.trim();
-            if next_is_deadline && !text.is_empty() {
-                extra.insert("마감일".to_string(), text.to_string());
-                next_is_deadline = false;
-            }
-            if text.contains("등록마감") || text.contains("마감일시") {
-                next_is_deadline = true;
+            let text = text.trim().to_string();
+            if deadline_date_re.is_match(&text)
+            {
+                extra.insert("마감일". to_string(), text);
+                break;
             }
         }
 
