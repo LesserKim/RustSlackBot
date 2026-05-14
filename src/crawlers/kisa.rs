@@ -1,4 +1,5 @@
 use scraper::{Html, Selector};
+use regex::Regex;
 use crate::models::Announcement;
 use super::base::{Crawler, build_client};
 
@@ -9,6 +10,66 @@ pub struct KisaCrawler {
 impl KisaCrawler {
     pub fn new(timeout: u64) -> Self {
         Self { timeout }
+    }
+
+    fn extract_detail(&self, client: &reqwest::blocking::Client, detail_url: &str) -> std::collections::HashMap<String, String> {
+        let mut extra = std::collections::HashMap::new();
+
+        let html = match client.get(detail_url).send().and_then(|r| r.text()) {
+            Ok(h) => h,
+            Err(_) => return extra,
+        };
+
+        let doc = Html::parse_document(&html);
+
+        // 테이블에서 등록마감일시 추출
+        let td_sel = Selector::parse("th, td").unwrap();
+        let mut next_is_deadline = false;
+        for cell in doc.select(&td_sel) {
+            let text = cell.text().collect::<String>();
+            let text = text.trim();
+            if next_is_deadline && !text.is_empty() {
+                extra.insert("마감일".to_string(), text.to_string());
+                next_is_deadline = false;
+            }
+            if text.contains("등록마감") || text.contains("마감일시") {
+                next_is_deadline = true;
+            }
+        }
+
+        // 본문 텍스트에서 금액 추출
+        let content_sel = Selector::parse("div.board_detail_contents").unwrap();
+        if let Some(content) = doc.select(&content_sel).next() {
+            let text = content.text().collect::<Vec<_>>().join("\n");
+
+            let money_patterns = [
+                r"소요예산\s*:\s*([\d,]+\s*원[^\n]*)",
+                r"예산액\s*:\s*([\d,]+\s*원[^\n]*)",
+                r"사업비\s*:\s*([\d,]+\s*원[^\n]*)",
+            ];
+            for pattern in money_patterns {
+                let re = Regex::new(pattern).unwrap();
+                if let Some(c) = re.captures(&text) {
+                    extra.insert("금액".to_string(), c.get(1).unwrap().as_str().trim().to_string());
+                    break;
+                }
+            }
+
+            let period_patterns = [
+                r"공개기간\s*:\s*([^\n]{5,50}~[^\n]{5,50})",
+                r"수행기간\s*:\s*([^\n]{5,50}~[^\n]{5,50})",
+                r"사업기간\s*:\s*([^\n]{5,50}~[^\n]{5,50})",
+            ];
+            for pattern in period_patterns {
+                let re = Regex::new(pattern).unwrap();
+                if let Some(c) = re.captures(&text) {
+                    extra.insert("기간".to_string(), c.get(1).unwrap().as_str().trim().to_string());
+                    break;
+                }
+            }
+        }
+
+        extra
     }
 }
 
@@ -70,6 +131,9 @@ impl Crawler for KisaCrawler {
             let date = tr.select(&date_sel).next()
                 .map(|t| t.text().collect::<String>().trim().to_string());
 
+            // 상세 페이지에서 마감일/금액 추출
+            let extra = self.extract_detail(&client, &full_url);
+
             let mut ann = Announcement::new(
                 format!("kisa_{}", ann_id),
                 title,
@@ -77,6 +141,8 @@ impl Crawler for KisaCrawler {
                 self.source_name().to_string(),
             );
             ann.date = date;
+            ann.deadline = extra.get("마감일").cloned();
+            ann.extra = extra;
 
             results.push(ann);
         }
@@ -84,6 +150,3 @@ impl Crawler for KisaCrawler {
         Ok(results)
     }
 }
-
-
-

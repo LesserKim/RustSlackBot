@@ -11,6 +11,75 @@ impl KistiCrawler {
     pub fn new(timeout: u64) -> Self {
         Self { timeout }
     }
+
+    fn extract_detail(&self, client: &reqwest::blocking::Client, detail_url: &str) -> (Option<String>, std::collections::HashMap<String, String>) {
+        let mut extra = std::collections::HashMap::new();
+        let mut deadline = None;
+
+        // 상세 페이지 접속
+        let html = match client.get(detail_url).send().and_then(|r| r.text()) {
+            Ok(h) => h,
+            Err(_) => return (deadline, extra),
+        };
+
+        // 접수기간 추출
+        let deadline_re = Regex::new(r"접수기간\s*:\s*([^\n]+)").unwrap();
+        if let Some(c) = deadline_re.captures(&html) {
+            deadline = Some(c.get(1).unwrap().as_str().trim().to_string());
+        }
+
+        // 첨부파일 "바로보기" URL 찾기
+        let doc = Html::parse_document(&html);
+        let preview_sel = Selector::parse("div.board_file a").unwrap();
+        let preview_re = Regex::new(r"filePreview\('([^']+)'").unwrap();
+
+        // 제안요청서(RFP) 파일 우선 찾기
+        for a in doc.select(&preview_sel) {
+            let onclick = a.value().attr("onclick").unwrap_or("");
+            if let Some(c) = preview_re.captures(onclick) {
+                let filename = c.get(1).unwrap().as_str();
+
+                // 제안요청서 파일인지 확인 (RFP, 제안요청서, 제안요청)
+                let link_text = a.text().collect::<String>();
+                let parent_text = a.parent().map(|p| {
+                    p.children()
+                    .filter_map(|c| c.value().as_text().map(|t| t.text.as_ref()))
+                    .collect::<String>()
+                }).unwrap_or_default();
+
+                let combined = format!("{}{}", link_text, parent_text);
+                let is_rfp = combined.contains("제안요청") || combined.contains("RFP") || combined.contains("제안 요청");
+
+                if !is_rfp {
+                    continue;
+                }
+
+                // 바로보기 HTML 접속
+                let preview_url = format!(
+                    "https://www.kisti.re.kr/resources/htmlconverter_skin/doc.jsp?fn={}&rs=/fatt/htmlconverter_preview",
+                    filename
+                );
+
+                if let Ok(preview_html) = client.get(&preview_url).send().and_then(|r| r.text()) {
+                    // 연구기간 추출
+                    let period_re = Regex::new(r"연구기간\s*[:\s]*(\d{4}[\.\-]\d{2}[\.\-]?\d{0,2}\s*[~～]\s*\d{4}[\.\-]\d{2}[\.\-]?\d{0,2})").unwrap();
+                    if let Some(c) = period_re.captures(&preview_html) {
+                        extra.insert("기간".to_string(), c.get(1).unwrap().as_str().trim().to_string());
+                    }
+
+                    // 연구비/위탁연구비 추출
+                    let money_re = Regex::new(r"(?:위탁연구비|연구비|예산)[^\d]*?([\d,]+\s*천원|[\d,]+\s*원|[\d,]+\s*백만원)").unwrap();
+                    if let Some(c) = money_re.captures(&preview_html) {
+                        extra.insert("금액".to_string(), c.get(1).unwrap().as_str().trim().to_string());
+                    }
+                }
+
+                break;
+            }
+        }
+
+        (deadline, extra)
+    }
 }
 
 impl Crawler for KistiCrawler {
@@ -31,7 +100,6 @@ impl Crawler for KistiCrawler {
         let li_sel = Selector::parse("li").unwrap();
         let title_sel = Selector::parse("p.title a").unwrap();
         let date_sel = Selector::parse("span.date").unwrap();
-        let info_sel = Selector::parse("span.info").unwrap();
 
         let mut results = vec![];
 
@@ -41,6 +109,7 @@ impl Crawler for KistiCrawler {
         };
 
         let jsess_re = Regex::new(r";jsessionid=[^?&]*").unwrap();
+        let date_re = Regex::new(r"(\d{4}[\.\-]\s*\d{2}[\.\-]\s*\d{2})").unwrap();
 
         for li in ul.select(&li_sel) {
             let a = match li.select(&title_sel).next() {
@@ -77,17 +146,14 @@ impl Crawler for KistiCrawler {
                 format!("{:x}", hasher.finish())
             };
 
-            let date = li.select(&date_sel).next()
-                .map(|t| t.text().collect::<String>().trim().to_string());
-
-            let deadline = li.select(&info_sel).next().and_then(|t| {
-                let text = t.text().collect::<String>();
-                if text.contains("마감") || text.contains("접수") {
-                    text.split(":").last().map(|s| s.trim().to_string())
-                } else {
-                    None
-                }
+            // 등록일
+            let date = li.select(&date_sel).next().and_then(|t| {
+                let text = t.text().collect::<String>().trim().to_string();
+                date_re.captures(&text).map(|c| c.get(1).unwrap().as_str().to_string())
             });
+
+            // 상세 페이지 + 첨부파일에서 마감일/금액/기간 추출
+            let (deadline, extra) = self.extract_detail(&client, &full_url);
 
             let mut ann = Announcement::new(
                 format!("kisti_{}", ann_id),
@@ -97,6 +163,7 @@ impl Crawler for KistiCrawler {
             );
             ann.date = date;
             ann.deadline = deadline;
+            ann.extra = extra;
 
             results.push(ann);
         }
