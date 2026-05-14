@@ -2,7 +2,7 @@ use std::time::Duration;
 use reqwest::blocking::Client;
 use crate::models::Announcement;
 
-pub const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+pub const USER_AGENT: &str = "Mozilla/5.0";
 
 pub fn build_client(timeout_secs: u64) -> Client {
     Client::builder()
