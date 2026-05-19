@@ -29,8 +29,7 @@ impl Crawler for IitpCrawler {
         let doc = Html::parse_document(&html);
         let li_sel = Selector::parse("ul.basic_bbs li.clearfix").unwrap();
         let tit_sel = Selector::parse("span.tit").unwrap();
-        let a_sel = Selector::parse("strong.bbs_tit a").unwrap();
-        let info_sel = Selector::parse("span.bbs_info").unwrap();
+        let a_sel = Selector::parse("a[onclick]").unwrap();
         let info_span_sel = Selector::parse("span.bbs_info span").unwrap();
 
         let mut results = vec![];
@@ -38,7 +37,6 @@ impl Crawler for IitpCrawler {
         let onclick_re = Regex::new(r"post_to_url\('([^']+)'").unwrap();
 
         for li in doc.select(&li_sel) {
-            // 제목
             let title = match li.select(&tit_sel).next() {
                 Some(t) => t.text().collect::<String>().trim().to_string(),
                 None => continue,
@@ -48,7 +46,6 @@ impl Crawler for IitpCrawler {
                 continue;
             }
 
-            // 링크 (onclick에서 추출)
             let a = match li.select(&a_sel).next() {
                 Some(a) => a,
                 None => continue,
@@ -62,23 +59,22 @@ impl Crawler for IitpCrawler {
 
             let full_url = format!("https://ezone.iitp.kr{}", path);
 
-            // 공고 ID (PMS_TK_PBNC_ID)
-            let ann_id = if full_url.contains("PMS_TK_PBNC_ID=") {
-                full_url.split("PMS_TK_PBNC_ID=").nth(1).unwrap().split("&").next().unwrap().to_string()
-            } else {
-                use std::hash::{Hash, Hasher};
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                full_url.hash(&mut hasher);
-                format!("{:x}", hasher.finish())
+            let ann_id_re = Regex::new(r"(?:PMS_TSK_PBNC_ID|PMS_DMSY_PBNC_ID|PMS_TK_PBNC_ID)=([^&]+)").unwrap();
+            let ann_id = match ann_id_re.captures(&full_url) {
+                Some(c) => c.get(1).unwrap().as_str().to_string(),
+                None => {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    full_url.hash(&mut hasher);
+                    format!("{:x}", hasher.finish())
+                }
             };
 
-            // 접수기간 (span.bbs_info 안의 span)
             let mut date = None;
             let mut deadline = None;
 
             if let Some(info_span) = li.select(&info_span_sel).next() {
                 let period = info_span.text().collect::<String>().trim().to_string();
-                // "2026-05-12 ~ 2026-05-18" 형식
                 let parts: Vec<&str> = period.split('~').collect();
                 if parts.len() == 2 {
                     date = Some(parts[0].trim().to_string());
