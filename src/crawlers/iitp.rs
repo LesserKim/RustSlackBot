@@ -27,10 +27,10 @@ impl Crawler for IitpCrawler {
             .text()?;
 
         let doc = Html::parse_document(&html);
-        let li_sel = Selector::parse("ul.basic_bbs li.clearfix").unwrap();
-        let tit_sel = Selector::parse("span.tit").unwrap();
-        let btn_sel = Selector::parse("a.btn.btg_black").unwrap();
-        let info_span_sel = Selector::parse("span.bbs_info span").unwrap();
+        let li_sel = Selector::parse("li.clearfix").unwrap();
+        let tit_a_sel = Selector::parse("strong.bbs_tit a[onclick]").unwrap();
+        let tit_span_sel = Selector::parse("span.tit").unwrap();
+        let info_sel = Selector::parse("span.bbs_info strong span").unwrap();
 
         let mut results = vec![];
 
@@ -38,21 +38,23 @@ impl Crawler for IitpCrawler {
         let id_re = Regex::new(r"(?:PMS_TSK_PBNC_ID|PMS_DMSY_PBNC_ID)=([^&]+)").unwrap();
 
         for li in doc.select(&li_sel) {
-            let title = match li.select(&tit_sel).next() {
-                Some(t) => t.text().collect::<String>().trim().to_string(),
+            // 제목 링크
+            let a = match li.select(&tit_a_sel).next() {
+                Some(a) => a,
                 None => continue,
+            };
+
+            // 제목 텍스트
+            let title = match a.select(&tit_span_sel).next() {
+                Some(t) => t.text().collect::<String>().trim().to_string(),
+                None => a.text().collect::<String>().trim().to_string(),
             };
 
             if title.is_empty() {
                 continue;
             }
 
-            let btn = match li.select(&btn_sel).next() {
-                Some(b) => b,
-                None => continue,
-            };
-
-            let onclick = btn.value().attr("onclick").unwrap_or("");
+            let onclick = a.value().attr("onclick").unwrap_or("");
             let path = match onclick_re.captures(onclick) {
                 Some(c) => c.get(1).unwrap().as_str().to_string(),
                 None => continue,
@@ -70,11 +72,12 @@ impl Crawler for IitpCrawler {
                 }
             };
 
+            // 접수기간
             let mut date = None;
             let mut deadline = None;
 
-            if let Some(info_span) = li.select(&info_span_sel).next() {
-                let period = info_span.text().collect::<String>().trim().to_string();
+            if let Some(span) = li.select(&info_sel).next() {
+                let period = span.text().collect::<String>().trim().to_string();
                 let parts: Vec<&str> = period.split('~').collect();
                 if parts.len() == 2 {
                     date = Some(parts[0].trim().to_string());
