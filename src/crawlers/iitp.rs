@@ -29,12 +29,13 @@ impl Crawler for IitpCrawler {
         let doc = Html::parse_document(&html);
         let li_sel = Selector::parse("ul.basic_bbs li.clearfix").unwrap();
         let tit_sel = Selector::parse("span.tit").unwrap();
-        let a_sel = Selector::parse("a[onclick]").unwrap();
+        let btn_sel = Selector::parse("a.btn.btg_black").unwrap();
         let info_span_sel = Selector::parse("span.bbs_info span").unwrap();
 
         let mut results = vec![];
 
         let onclick_re = Regex::new(r"post_to_url\('([^']+)'").unwrap();
+        let id_re = Regex::new(r"(?:PMS_TSK_PBNC_ID|PMS_DMSY_PBNC_ID)=([^&]+)").unwrap();
 
         for li in doc.select(&li_sel) {
             let title = match li.select(&tit_sel).next() {
@@ -46,12 +47,12 @@ impl Crawler for IitpCrawler {
                 continue;
             }
 
-            let a = match li.select(&a_sel).next() {
-                Some(a) => a,
+            let btn = match li.select(&btn_sel).next() {
+                Some(b) => b,
                 None => continue,
             };
 
-            let onclick = a.value().attr("onclick").unwrap_or("");
+            let onclick = btn.value().attr("onclick").unwrap_or("");
             let path = match onclick_re.captures(onclick) {
                 Some(c) => c.get(1).unwrap().as_str().to_string(),
                 None => continue,
@@ -59,8 +60,7 @@ impl Crawler for IitpCrawler {
 
             let full_url = format!("https://ezone.iitp.kr{}", path);
 
-            let ann_id_re = Regex::new(r"(?:PMS_TSK_PBNC_ID|PMS_DMSY_PBNC_ID|PMS_TK_PBNC_ID)=([^&]+)").unwrap();
-            let ann_id = match ann_id_re.captures(&full_url) {
+            let ann_id = match id_re.captures(&full_url) {
                 Some(c) => c.get(1).unwrap().as_str().to_string(),
                 None => {
                     use std::hash::{Hash, Hasher};
