@@ -19,7 +19,7 @@ impl Crawler for EtriCrawler {
     }
 
     fn fetch(&self) -> Result<Vec<Announcement>, Box<dyn std::error::Error>> {
-        let url = "https://ebid.etri.re.kr/ebid/main.do?tabId=&g2b_conn=&dev=ebidList&biNo=&loginpage=Y&login_regnum=&pgmUrl=.%2Febid%2FebidCustProgressList.do&pageGb=";
+        let url = "https://ebid.etr i.re.kr/ebid/main.do?tabId=&g2b_conn=&dev=ebidList&biNo=&loginpage=Y&login_regnum=&pgmUrl=.%2Febid%2FebidCustProgressList.do&pageGb=";
         let client = build_client(self.timeout);
         let html = client.get(url)
             .header("Referer", "https://ebid.etri.re.kr")
