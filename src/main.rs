@@ -5,6 +5,7 @@ mod filter;
 mod slack;
 mod extractor;
 mod crawlers;
+mod summarizer;
 
 use std::thread;
 use std::time::Duration;
