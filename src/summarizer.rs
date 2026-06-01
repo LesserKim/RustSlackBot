@@ -8,6 +8,8 @@ pub fn summarize(text: &str) -> Option<String> {
         .build()
         .ok()?;
 
+    let truncated: String = text.chars().take(1000).collect();
+
     let prompt = format!(
         "다음 R&D 공고 본문을 간결하게 요약해줘. 반드시 아래 형식으로만 답변해:\n\
         - 예산: (금액)\n\
@@ -20,7 +22,7 @@ pub fn summarize(text: &str) -> Option<String> {
     );
 
     let body = json!({
-        "model": "qwen2.5:7b",
+        "model": "qwen2.5:0.5b",
         "prompt": prompt,
         "stream": false
     });

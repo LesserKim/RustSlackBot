@@ -10,9 +10,10 @@ mod summarizer;
 use std::thread;
 use std::time::Duration;
 use chrono::Local;
+use scraper::{Html, Selector};
 
 use crate::config::Config;
-use crate::crawlers::base::Crawler;
+use crate::crawlers::base::{Crawler, build_client};
 use crate::crawlers::{
     ntis::NtisCrawler,
     kisa::KisaCrawler,
@@ -37,6 +38,42 @@ fn build_crawlers(timeout: u64) -> Vec<Box<dyn Crawler>> {
         Box::new(EtriCrawler::new(timeout)),
         Box::new(MsitCrawler::new(timeout)),
     ]
+}
+
+fn fetch_and_summarize(url: &str, timeout: u64) -> Option<String> {
+    let client = build_client(timeout);
+    let html = client.get(url).send().ok()?.text().ok()?;
+    let doc = Html::parse_document(&html);
+
+    // 본문 텍스트 추출 (여러 셀렉터 시도)
+    let selectors = [
+        "div.board_detail_contents",
+        "div.board_body",
+        "div.bbs_cnt",
+        "div.content_body",
+        "article",
+        "div#content",
+        "body",
+    ];
+
+    let mut body_text = String::new();
+    for sel_str in selectors {
+        if let Ok(sel) = Selector::parse(sel_str) {
+            if let Some(el) = doc.select(&sel).next() {
+                body_text = el.text().collect::<Vec<_>>().join("\n");
+                if body_text.len() > 100 {
+                    break;
+                }
+            }
+        }
+    }
+
+    if body_text.len() < 50 {
+        return None;
+    }
+
+    log::info!("AI 요약 중: {}...", &url[..url.len().min(60)]);
+    summarizer::summarize(&body_text)
 }
 
 fn run_job(cfg: &Config) {
@@ -70,6 +107,14 @@ fn run_job(cfg: &Config) {
         thread::sleep(Duration::from_secs_f64(cfg.request_delay));
     }
 
+    // 신규 공고에 AI 요약 추가
+    for ann in &mut all_new {
+        if let Some(summary) = fetch_and_summarize(&ann.url, cfg.request_timeout) {
+            ann.extra.insert("AI요약".to_string(), summary);
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+
     if !all_new.is_empty() {
         let notifier = slack::SlackNotifier::new(
             cfg.slack_bot_token.clone(),
@@ -101,7 +146,7 @@ fn main() {
         return;
     }
 
-    // 스케줄러 모드: 단순 루프 방식
+    // 스케줄러 모드
     log::info!("스케줄러 시작");
     for time_str in &cfg.schedule_times {
         log::info!("스케줄 등록: 매일 {}", time_str);
@@ -111,7 +156,6 @@ fn main() {
         let now = Local::now().format("%H:%M").to_string();
         if cfg.schedule_times.contains(&now) {
             run_job(&cfg);
-            // 같은 분에 다시 실행 안 되게 61초 대기
             thread::sleep(Duration::from_secs(61));
         } else {
             thread::sleep(Duration::from_secs(30));

@@ -79,12 +79,6 @@ impl KisaCrawler {
                     break;
                 }
             }
-
-            // AI 요약
-            let body_text = content.text().collect::<Vec<_>>().join("\n");
-            if let Some(summary) = crate::summarizer::summarize(&body_text) {
-                extra.insert("AI요약".to_string(), summary);
-            }
         }
 
         extra
