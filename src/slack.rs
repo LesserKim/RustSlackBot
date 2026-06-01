@@ -55,13 +55,19 @@ impl SlackNotifier {
                 format!("\n{}", extra_parts.join(" | "))
             };
 
+            let ai_str = if let Some(v) = ann.extra.get("AI요약") {
+                format!("\n📋 {}", v)
+            } else {
+                String::new()
+            };
+
             blocks.push(json!({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
                     "text": format!(
-                        "*<{}|{}>*\n{}\n키워드: {}{}",
-                        ann.url, ann.title, meta_str, keyword_str, extra_str
+                        "*<{}|{}>*\n{}\n키워드: {}{}{}",
+                        ann.url, ann.title, meta_str, keyword_str, extra_str, ai_str
                     )
                 }
             }));

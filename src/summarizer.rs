@@ -16,7 +16,7 @@ pub fn summarize(text: &str) -> Option<String> {
         - 자격: (참여자격)\n\
         정보가 없으면 해당 항목은 생략해.\n\n\
         공고 본문:\n{}",
-        &text[..text.len().min(3000)]
+        truncated
     );
 
     let body = json!({

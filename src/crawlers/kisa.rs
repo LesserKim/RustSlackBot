@@ -22,14 +22,12 @@ impl KisaCrawler {
 
         let doc = Html::parse_document(&html);
 
-        // 등록 마감일시 추출
         // 테이블에서 등록마감일시 추출 (헤더 행 → 데이터 행)
         let tr_sel = Selector::parse("tr").unwrap();
         let td_sel2 = Selector::parse("td").unwrap();
         let mut deadline_col_idx: Option<usize> = None;
         for tr in doc.select(&tr_sel) {
             let tds: Vec<_> = tr.select(&td_sel2).collect();
-            // 헤더 행에서 등록마감일시 칼럼 위치 찾기
             if deadline_col_idx.is_none() {
                 for (i, td) in tds.iter().enumerate() {
                     let text = td.text().collect::<String>();
@@ -40,7 +38,6 @@ impl KisaCrawler {
                 }
                 continue;
             }
-            // 데이터 행에서 같은 위치의 값 추출
             if let Some(idx) = deadline_col_idx {
                 if let Some(td) = tds.get(idx) {
                     let text = td.text().collect::<String>().trim().to_string();
@@ -52,7 +49,7 @@ impl KisaCrawler {
             }
         }
 
-        // 본문 텍스트에서 금액 추출
+        // 본문 텍스트에서 금액/기간 추출
         let content_sel = Selector::parse("div.board_detail_contents").unwrap();
         if let Some(content) = doc.select(&content_sel).next() {
             let text = content.text().collect::<Vec<_>>().join("\n");
@@ -81,11 +78,12 @@ impl KisaCrawler {
                     extra.insert("기간".to_string(), c.get(1).unwrap().as_str().trim().to_string());
                     break;
                 }
-                let body_text = context.text().collect::<Vec<_>>().join("\n");
-                if let Some(Summary) = crate::summarizer::summarize(&body_text){
-                    extra.insert (A"I 요약)
-                }
+            }
 
+            // AI 요약
+            let body_text = content.text().collect::<Vec<_>>().join("\n");
+            if let Some(summary) = crate::summarizer::summarize(&body_text) {
+                extra.insert("AI요약".to_string(), summary);
             }
         }
 
@@ -151,7 +149,6 @@ impl Crawler for KisaCrawler {
             let date = tr.select(&date_sel).next()
                 .map(|t| t.text().collect::<String>().trim().to_string());
 
-            // 상세 페이지에서 마감일/금액 추출
             let extra = self.extract_detail(&client, &full_url);
 
             let mut ann = Announcement::new(
