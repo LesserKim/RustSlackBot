@@ -22,7 +22,7 @@ pub fn summarize(text: &str) -> Option<String> {
     );
 
     let body = json!({
-        "model": "qwen2.5:0.5b",
+        "model": "qwen2.5:1.5b",
         "prompt": prompt,
         "stream": false
     });
