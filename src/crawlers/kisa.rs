@@ -81,6 +81,11 @@ impl KisaCrawler {
                     extra.insert("기간".to_string(), c.get(1).unwrap().as_str().trim().to_string());
                     break;
                 }
+                let body_text = context.text().collect::<Vec<_>>().join("\n");
+                if let Some(Summary) = crate::summarizer::summarize(&body_text){
+                    extra.insert (A"I 요약)
+                }
+
             }
         }
 
